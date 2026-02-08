@@ -1,0 +1,1286 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#0a1628">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="mobile-web-app-capable" content="yes">
+<title>FreezeTrack</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,500;0,9..40,700&family=Playfair+Display:wght@700;800&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/quagga/0.12.1/quagga.min.js"></script>
+<style>
+:root {
+  --bg-deep: #0a1628;
+  --bg-card: #111d33;
+  --bg-card-hover: #162440;
+  --frost-1: #4fc3f7;
+  --frost-2: #81d4fa;
+  --frost-3: #b3e5fc;
+  --ice-glow: rgba(79, 195, 247, 0.15);
+  --ice-glow-strong: rgba(79, 195, 247, 0.3);
+  --warning: #ffb74d;
+  --danger: #ef5350;
+  --success: #66bb6a;
+  --text-primary: #e8f4fd;
+  --text-secondary: #7da8c9;
+  --text-muted: #4a6d8c;
+  --border: rgba(79, 195, 247, 0.12);
+  --radius: 16px;
+  --radius-sm: 10px;
+  --shadow: 0 8px 32px rgba(0,0,0,0.3);
+  --font-display: 'Playfair Display', Georgia, serif;
+  --font-body: 'DM Sans', system-ui, sans-serif;
+  --fridge-accent: #66bb6a;
+  --freezer-accent: #4fc3f7;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { height: 100%; overflow: hidden; }
+body {
+  font-family: var(--font-body);
+  background: var(--bg-deep);
+  color: var(--text-primary);
+  overscroll-behavior: none;
+}
+
+.frost-bg {
+  position: fixed; inset: 0; z-index: 0; pointer-events: none;
+  background:
+    radial-gradient(ellipse 600px 400px at 20% 10%, rgba(79,195,247,0.07), transparent),
+    radial-gradient(ellipse 500px 500px at 80% 90%, rgba(129,212,250,0.05), transparent),
+    var(--bg-deep);
+}
+
+.app {
+  position: relative; z-index: 1;
+  display: flex; flex-direction: column;
+  height: 100vh; height: 100dvh;
+  max-width: 520px; margin: 0 auto;
+}
+
+/* ============ HEADER ============ */
+.header {
+  padding: 14px 20px 10px;
+  display: flex; align-items: center; justify-content: space-between;
+  flex-shrink: 0;
+}
+.header h1 {
+  font-family: var(--font-display);
+  font-size: 24px; font-weight: 800;
+  background: linear-gradient(135deg, var(--frost-1), var(--frost-3));
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+}
+.header-right { display: flex; align-items: center; gap: 10px; }
+.count-badge {
+  background: var(--ice-glow); border: 1px solid var(--border);
+  border-radius: 20px; padding: 3px 12px;
+  font-size: 12px; font-weight: 500; color: var(--frost-2);
+}
+.settings-btn {
+  width: 34px; height: 34px; border-radius: 10px;
+  background: var(--bg-card); border: 1px solid var(--border);
+  color: var(--text-secondary); display: flex; align-items: center;
+  justify-content: center; cursor: pointer; font-size: 16px;
+  transition: all 0.15s;
+}
+.settings-btn:active { background: var(--ice-glow); }
+
+/* ============ APPLIANCE TABS ============ */
+.appliance-tabs {
+  display: flex; gap: 8px; padding: 0 20px 10px;
+  overflow-x: auto; flex-shrink: 0;
+  scrollbar-width: none;
+}
+.appliance-tabs::-webkit-scrollbar { display: none; }
+.appliance-tab {
+  flex-shrink: 0; display: flex; align-items: center; gap: 7px;
+  padding: 8px 16px; border-radius: 12px;
+  background: var(--bg-card); border: 1px solid var(--border);
+  color: var(--text-secondary); cursor: pointer;
+  transition: all 0.2s; user-select: none; font-size: 13px; font-weight: 500;
+  position: relative;
+}
+.appliance-tab .tab-icon { font-size: 16px; }
+.appliance-tab .tab-count {
+  background: rgba(255,255,255,0.08); border-radius: 8px;
+  padding: 1px 7px; font-size: 11px; font-weight: 600;
+  margin-left: 2px;
+}
+.appliance-tab.active-fridge {
+  background: linear-gradient(135deg, rgba(102,187,106,0.2), rgba(102,187,106,0.08));
+  border-color: rgba(102,187,106,0.4); color: var(--fridge-accent);
+}
+.appliance-tab.active-fridge .tab-count { background: rgba(102,187,106,0.2); }
+.appliance-tab.active-freezer {
+  background: linear-gradient(135deg, rgba(79,195,247,0.2), rgba(79,195,247,0.08));
+  border-color: rgba(79,195,247,0.4); color: var(--freezer-accent);
+}
+.appliance-tab.active-freezer .tab-count { background: rgba(79,195,247,0.2); }
+.appliance-tab .tab-delete {
+  display: none; margin-left: 4px; font-size: 14px; opacity: 0.5;
+  cursor: pointer; line-height: 1;
+}
+.appliance-tab:not(.active-fridge):not(.active-freezer):hover .tab-delete,
+.appliance-tab .tab-delete.show { display: inline; }
+.add-appliance-btn {
+  flex-shrink: 0; width: 36px; height: 36px;
+  border-radius: 10px; background: var(--bg-card);
+  border: 1px dashed var(--border); color: var(--text-muted);
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; font-size: 18px; transition: all 0.15s;
+}
+.add-appliance-btn:active { background: var(--ice-glow); color: var(--frost-1); }
+
+/* ============ SEARCH ============ */
+.search-wrap { padding: 0 20px 10px; flex-shrink: 0; }
+.search-bar {
+  display: flex; align-items: center; gap: 10px;
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); padding: 9px 14px;
+  transition: border-color 0.2s;
+}
+.search-bar:focus-within { border-color: var(--frost-1); }
+.search-bar svg { flex-shrink: 0; color: var(--text-muted); }
+.search-bar input {
+  flex: 1; border: none; background: none; outline: none;
+  color: var(--text-primary); font-family: var(--font-body); font-size: 14px;
+}
+.search-bar input::placeholder { color: var(--text-muted); }
+
+/* ============ FILTERS ============ */
+.filters {
+  display: flex; gap: 7px; padding: 0 20px 10px;
+  overflow-x: auto; flex-shrink: 0; scrollbar-width: none;
+}
+.filters::-webkit-scrollbar { display: none; }
+.chip {
+  flex-shrink: 0; padding: 5px 14px; border-radius: 20px;
+  font-size: 12px; font-weight: 500;
+  background: var(--bg-card); border: 1px solid var(--border);
+  color: var(--text-secondary); cursor: pointer;
+  transition: all 0.2s; user-select: none;
+}
+.chip.active {
+  background: linear-gradient(135deg, var(--frost-1), #29b6f6);
+  border-color: transparent; color: var(--bg-deep);
+}
+
+/* ============ LIST ============ */
+.list-container {
+  flex: 1; overflow-y: auto; padding: 0 20px 100px;
+  -webkit-overflow-scrolling: touch;
+}
+.list-container::-webkit-scrollbar { width: 3px; }
+.list-container::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+.empty-state {
+  display: flex; flex-direction: column; align-items: center;
+  justify-content: center; padding: 50px 20px; text-align: center;
+}
+.empty-state .icon { font-size: 56px; margin-bottom: 14px; opacity: 0.6; }
+.empty-state h3 { font-family: var(--font-display); font-size: 18px; margin-bottom: 6px; color: var(--frost-2); }
+.empty-state p { color: var(--text-muted); font-size: 13px; line-height: 1.5; }
+
+/* ============ ITEM CARD ============ */
+.item-card {
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 12px;
+  margin-bottom: 10px; display: flex; gap: 12px;
+  transition: all 0.2s; animation: slideIn 0.3s ease-out;
+  position: relative; overflow: hidden;
+}
+.item-card::before {
+  content: ''; position: absolute; left: 0; top: 0; bottom: 0;
+  width: 3px; border-radius: 0 3px 3px 0;
+}
+.item-card.status-ok::before { background: var(--success); }
+.item-card.status-warning::before { background: var(--warning); }
+.item-card.status-danger::before { background: var(--danger); }
+
+.item-photo {
+  width: 58px; height: 58px; border-radius: var(--radius-sm);
+  object-fit: cover; flex-shrink: 0;
+  background: var(--bg-deep); border: 1px solid var(--border);
+}
+.item-photo-placeholder {
+  width: 58px; height: 58px; border-radius: var(--radius-sm);
+  flex-shrink: 0; display: flex; align-items: center; justify-content: center;
+  background: var(--bg-deep); border: 1px solid var(--border); font-size: 26px;
+}
+.item-info { flex: 1; min-width: 0; }
+.item-name {
+  font-weight: 700; font-size: 14px; margin-bottom: 3px;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.item-meta {
+  display: flex; flex-wrap: wrap; gap: 4px 10px;
+  font-size: 11px; color: var(--text-secondary);
+}
+.item-meta span { display: flex; align-items: center; gap: 3px; }
+.item-actions {
+  display: flex; flex-direction: column; gap: 4px;
+  flex-shrink: 0; align-items: flex-end;
+}
+.qty-controls { display: flex; align-items: center; gap: 2px; }
+.qty-btn {
+  width: 28px; height: 28px; border-radius: 7px;
+  border: 1px solid var(--border); background: var(--bg-deep);
+  color: var(--frost-1); font-size: 15px; font-weight: 700;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; transition: all 0.15s;
+}
+.qty-btn:active { background: var(--ice-glow); transform: scale(0.92); }
+.qty-value {
+  min-width: 32px; text-align: center; font-weight: 700;
+  font-size: 14px; color: var(--text-primary);
+}
+.weight-btn {
+  background: none; border: 1px solid var(--border);
+  border-radius: 6px; padding: 2px 8px;
+  color: var(--text-secondary); cursor: pointer;
+  font-size: 11px; font-family: var(--font-body);
+  transition: all 0.15s; display: flex; align-items: center; gap: 3px;
+}
+.weight-btn:active { background: var(--ice-glow); color: var(--frost-1); }
+.delete-btn {
+  background: none; border: none; color: var(--text-muted);
+  cursor: pointer; padding: 3px; font-size: 11px; transition: color 0.2s;
+}
+.delete-btn:active { color: var(--danger); }
+.barcode-label { font-size: 10px; color: var(--text-muted); font-family: monospace; }
+
+.expiry-badge {
+  display: inline-flex; align-items: center; gap: 3px;
+  padding: 2px 7px; border-radius: 6px; font-size: 10px; font-weight: 600;
+}
+.expiry-badge.ok { background: rgba(102,187,106,0.15); color: var(--success); }
+.expiry-badge.warning { background: rgba(255,183,77,0.15); color: var(--warning); }
+.expiry-badge.danger { background: rgba(239,83,80,0.15); color: var(--danger); }
+
+.weight-tag {
+  display: inline-flex; align-items: center; gap: 3px;
+  padding: 2px 7px; border-radius: 6px; font-size: 10px; font-weight: 600;
+  background: rgba(79,195,247,0.1); color: var(--frost-2);
+}
+
+/* ============ FAB ============ */
+.fab {
+  position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%);
+  width: 56px; height: 56px; border-radius: 50%;
+  background: linear-gradient(135deg, var(--frost-1), #0288d1);
+  border: none; color: white; font-size: 26px; font-weight: 300;
+  display: flex; align-items: center; justify-content: center;
+  cursor: pointer; z-index: 100;
+  box-shadow: 0 4px 20px rgba(79,195,247,0.4); transition: all 0.2s;
+}
+.fab:active { transform: translateX(-50%) scale(0.92); }
+
+/* ============ MODAL (shared) ============ */
+.modal-overlay {
+  position: fixed; inset: 0; z-index: 200;
+  background: rgba(0,0,0,0.6);
+  backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+  display: flex; align-items: flex-end; justify-content: center;
+  opacity: 0; pointer-events: none; transition: opacity 0.25s;
+}
+.modal-overlay.open { opacity: 1; pointer-events: all; }
+.modal {
+  width: 100%; max-width: 520px;
+  background: var(--bg-card); border-radius: 24px 24px 0 0;
+  padding: 16px 20px 32px;
+  transform: translateY(100%);
+  transition: transform 0.3s cubic-bezier(0.32, 0.72, 0, 1);
+  max-height: 92vh; overflow-y: auto;
+}
+.modal-overlay.open .modal { transform: translateY(0); }
+.modal-handle { width: 36px; height: 4px; border-radius: 2px; background: var(--text-muted); margin: 0 auto 16px; }
+.modal h2 {
+  font-family: var(--font-display); font-size: 20px; margin-bottom: 16px;
+  background: linear-gradient(135deg, var(--frost-1), var(--frost-3));
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+}
+
+/* ============ FORM ============ */
+.form-group { margin-bottom: 14px; }
+.form-label {
+  display: block; font-size: 11px; font-weight: 500;
+  color: var(--text-secondary); margin-bottom: 5px;
+  text-transform: uppercase; letter-spacing: 0.5px;
+}
+.form-input {
+  width: 100%; padding: 10px 12px;
+  background: var(--bg-deep); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); color: var(--text-primary);
+  font-family: var(--font-body); font-size: 14px;
+  outline: none; transition: border-color 0.2s;
+}
+.form-input:focus { border-color: var(--frost-1); }
+.form-row { display: flex; gap: 10px; }
+.form-row .form-group { flex: 1; }
+.form-row-3 { display: flex; gap: 10px; }
+.form-row-3 .form-group { flex: 1; }
+
+/* Select styled */
+.form-select {
+  width: 100%; padding: 10px 12px;
+  background: var(--bg-deep); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); color: var(--text-primary);
+  font-family: var(--font-body); font-size: 14px;
+  outline: none; transition: border-color 0.2s;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%237da8c9' stroke-width='2'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 12px center;
+}
+.form-select:focus { border-color: var(--frost-1); }
+.form-select option { background: var(--bg-card); color: var(--text-primary); }
+
+.photo-area {
+  border: 2px dashed var(--border); border-radius: var(--radius);
+  padding: 16px; text-align: center; cursor: pointer;
+  transition: all 0.2s; position: relative; overflow: hidden;
+  min-height: 100px; display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 6px;
+}
+.photo-area:active { border-color: var(--frost-1); background: var(--ice-glow); }
+.photo-area svg { color: var(--text-muted); }
+.photo-area p { font-size: 12px; color: var(--text-muted); }
+.photo-area img { max-width: 100%; max-height: 140px; border-radius: var(--radius-sm); object-fit: contain; }
+
+.scan-btn {
+  width: 100%; padding: 10px; border-radius: var(--radius-sm);
+  background: var(--bg-deep); border: 1px solid var(--border);
+  color: var(--frost-1); font-family: var(--font-body);
+  font-size: 13px; font-weight: 500;
+  display: flex; align-items: center; justify-content: center; gap: 8px;
+  cursor: pointer; transition: all 0.2s;
+}
+.scan-btn:active { background: var(--ice-glow); }
+
+.submit-btn {
+  width: 100%; padding: 13px; border: none; border-radius: var(--radius-sm);
+  background: linear-gradient(135deg, var(--frost-1), #0288d1);
+  color: white; font-family: var(--font-body);
+  font-size: 15px; font-weight: 700;
+  cursor: pointer; transition: all 0.2s; margin-top: 6px;
+}
+.submit-btn:active { transform: scale(0.98); }
+
+/* ============ SCANNER ============ */
+.scanner-overlay {
+  position: fixed; inset: 0; z-index: 300;
+  background: #000; display: none; flex-direction: column;
+}
+.scanner-overlay.active { display: flex; }
+.scanner-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 20px; background: rgba(0,0,0,0.8); z-index: 2;
+}
+.scanner-header h3 { color: white; font-size: 15px; }
+.scanner-close {
+  background: none; border: none; color: white;
+  font-size: 26px; cursor: pointer; padding: 4px;
+}
+#scanner-viewport { flex: 1; position: relative; overflow: hidden; }
+#scanner-viewport video { width: 100%; height: 100%; object-fit: cover; }
+.scanner-guide {
+  position: absolute; inset: 0; z-index: 1;
+  display: flex; align-items: center; justify-content: center;
+  pointer-events: none;
+}
+.scanner-guide .frame {
+  width: 260px; height: 160px;
+  border: 2px solid var(--frost-1); border-radius: 12px;
+  box-shadow: 0 0 0 2000px rgba(0,0,0,0.5); position: relative;
+}
+.scanner-guide .frame::after {
+  content: 'Inquadra il codice a barre';
+  position: absolute; bottom: -34px; left: 50%;
+  transform: translateX(-50%); white-space: nowrap;
+  color: var(--frost-2); font-size: 12px;
+}
+.scanner-guide .line {
+  position: absolute; left: 10px; right: 10px;
+  height: 2px; background: var(--frost-1);
+  top: 50%; animation: scanLine 2s ease-in-out infinite;
+  box-shadow: 0 0 8px var(--frost-1);
+}
+
+/* ============ CONFIRM / WEIGHT DIALOGS ============ */
+.dialog-overlay {
+  position: fixed; inset: 0; z-index: 250;
+  background: rgba(0,0,0,0.6); backdrop-filter: blur(8px);
+  display: flex; align-items: center; justify-content: center;
+  opacity: 0; pointer-events: none; transition: opacity 0.2s;
+}
+.dialog-overlay.open { opacity: 1; pointer-events: all; }
+.dialog-box {
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 22px;
+  width: 90%; max-width: 340px; text-align: center;
+}
+.dialog-box h3 { font-family: var(--font-display); font-size: 17px; margin-bottom: 8px; }
+.dialog-box p { font-size: 13px; color: var(--text-secondary); margin-bottom: 16px; }
+.dialog-actions { display: flex; gap: 10px; }
+.dialog-actions button {
+  flex: 1; padding: 10px; border-radius: var(--radius-sm);
+  font-family: var(--font-body); font-size: 13px; font-weight: 600;
+  cursor: pointer; transition: all 0.15s;
+}
+.btn-cancel { background: var(--bg-deep); border: 1px solid var(--border); color: var(--text-secondary); }
+.btn-danger { background: var(--danger); border: none; color: white; }
+.btn-primary { background: linear-gradient(135deg, var(--frost-1), #0288d1); border: none; color: white; }
+
+.dialog-input {
+  width: 100%; padding: 10px 12px; margin-bottom: 14px;
+  background: var(--bg-deep); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); color: var(--text-primary);
+  font-family: var(--font-body); font-size: 15px;
+  outline: none; text-align: center;
+}
+.dialog-input:focus { border-color: var(--frost-1); }
+.dialog-hint { font-size: 12px; color: var(--text-muted); margin-bottom: 14px; }
+
+/* ============ DETAIL MODAL ============ */
+.detail-overlay {
+  position: fixed; inset: 0; z-index: 200;
+  background: rgba(0,0,0,0.6); backdrop-filter: blur(8px);
+  display: flex; align-items: flex-end; justify-content: center;
+  opacity: 0; pointer-events: none; transition: opacity 0.25s;
+}
+.detail-overlay.open { opacity: 1; pointer-events: all; }
+.detail-modal {
+  width: 100%; max-width: 520px;
+  background: var(--bg-card); border-radius: 24px 24px 0 0;
+  padding: 16px 20px 32px;
+  transform: translateY(100%);
+  transition: transform 0.3s cubic-bezier(0.32, 0.72, 0, 1);
+  max-height: 80vh; overflow-y: auto;
+}
+.detail-overlay.open .detail-modal { transform: translateY(0); }
+.detail-photo {
+  width: 100%; max-height: 180px; object-fit: contain;
+  border-radius: var(--radius); margin-bottom: 14px; background: var(--bg-deep);
+}
+.detail-row {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 9px 14px; background: var(--bg-deep); border-radius: 10px; margin-bottom: 8px;
+}
+.detail-row .label { color: var(--text-secondary); font-size: 13px; }
+.detail-row .value { font-weight: 700; font-size: 14px; }
+
+/* ============ TOAST ============ */
+.toast {
+  position: fixed; top: 16px; left: 50%; transform: translateX(-50%) translateY(-120%);
+  background: var(--bg-card); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); padding: 10px 18px;
+  font-size: 13px; color: var(--text-primary);
+  z-index: 400; box-shadow: var(--shadow);
+  transition: transform 0.3s cubic-bezier(0.32, 0.72, 0, 1); max-width: 90%;
+}
+.toast.show { transform: translateX(-50%) translateY(0); }
+
+/* ============ ADD APPLIANCE MODAL ============ */
+.appliance-type-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 16px;
+}
+.appliance-type-option {
+  padding: 14px; border-radius: var(--radius-sm);
+  background: var(--bg-deep); border: 2px solid var(--border);
+  text-align: center; cursor: pointer; transition: all 0.2s;
+}
+.appliance-type-option:active { transform: scale(0.97); }
+.appliance-type-option.selected-fridge { border-color: var(--fridge-accent); background: rgba(102,187,106,0.08); }
+.appliance-type-option.selected-freezer { border-color: var(--freezer-accent); background: rgba(79,195,247,0.08); }
+.appliance-type-option .atype-icon { font-size: 28px; margin-bottom: 6px; }
+.appliance-type-option .atype-label { font-size: 13px; font-weight: 600; }
+
+/* ============ WEIGHT PROGRESS BAR ============ */
+.weight-bar-wrap { margin-top: 4px; }
+.weight-bar {
+  height: 4px; border-radius: 2px; background: rgba(79,195,247,0.1);
+  overflow: hidden;
+}
+.weight-bar-fill {
+  height: 100%; border-radius: 2px;
+  background: linear-gradient(90deg, var(--frost-1), var(--frost-2));
+  transition: width 0.3s;
+}
+.weight-text { font-size: 10px; color: var(--text-muted); margin-top: 2px; }
+
+@keyframes scanLine { 0%, 100% { top: 20%; } 50% { top: 80%; } }
+@keyframes slideIn { from { opacity: 0; transform: translateY(12px); } to { opacity: 1; transform: translateY(0); } }
+</style>
+</head>
+<body>
+<div class="frost-bg"></div>
+
+<div class="app" id="app">
+  <header class="header">
+    <h1>❄️ FreezeTrack</h1>
+    <div class="header-right">
+      <span class="count-badge" id="countBadge">0</span>
+      <button class="settings-btn" id="manageAppliancesBtn" title="Gestisci elettrodomestici">⚙</button>
+    </div>
+  </header>
+
+  <!-- Appliance Tabs -->
+  <div class="appliance-tabs" id="applianceTabs"></div>
+
+  <!-- Search -->
+  <div class="search-wrap">
+    <div class="search-bar">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+      <input type="text" id="searchInput" placeholder="Cerca prodotto...">
+    </div>
+  </div>
+
+  <!-- Filters -->
+  <div class="filters" id="filters">
+    <div class="chip active" data-filter="all">Tutti</div>
+    <div class="chip" data-filter="ok">✓ OK</div>
+    <div class="chip" data-filter="expiring">⚠ In scadenza</div>
+    <div class="chip" data-filter="expired">✕ Scaduti</div>
+  </div>
+
+  <div class="list-container" id="listContainer"></div>
+  <button class="fab" id="fabAdd">+</button>
+</div>
+
+<!-- ============ ADD ITEM MODAL ============ -->
+<div class="modal-overlay" id="addModal">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <h2 id="addModalTitle">Aggiungi prodotto</h2>
+
+    <div class="form-group">
+      <label class="form-label">Scansiona codice a barre</label>
+      <button class="scan-btn" id="scanBarcodeBtn" type="button">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7V5a2 2 0 012-2h2m10 0h2a2 2 0 012 2v2m0 10v2a2 2 0 01-2 2h-2M5 21H3a2 2 0 01-2-2v-2"/><line x1="7" y1="8" x2="7" y2="16"/><line x1="11" y1="8" x2="11" y2="16"/><line x1="15" y1="8" x2="15" y2="16"/></svg>
+        Scansiona barcode
+      </button>
+      <div id="barcodeResult" style="margin-top:5px;font-size:11px;color:var(--frost-2);font-family:monospace;"></div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Destinazione</label>
+      <select class="form-select" id="inputAppliance"></select>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Nome prodotto *</label>
+      <input class="form-input" type="text" id="inputName" placeholder="es. Pizza margherita">
+    </div>
+
+    <div class="form-row-3">
+      <div class="form-group">
+        <label class="form-label">Quantità *</label>
+        <input class="form-input" type="number" id="inputQty" value="1" min="1" step="1">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Peso (g)</label>
+        <input class="form-input" type="number" id="inputWeight" placeholder="es. 500" min="0" step="1">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Scadenza</label>
+        <input class="form-input" type="date" id="inputExpiry">
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Foto prodotto</label>
+      <div class="photo-area" id="photoArea">
+        <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>
+        <p>Tocca per scattare una foto</p>
+      </div>
+      <input type="file" id="photoInput" accept="image/*" capture="environment" style="display:none">
+    </div>
+
+    <button class="submit-btn" id="submitBtn">Aggiungi al congelatore</button>
+  </div>
+</div>
+
+<!-- ============ ADD APPLIANCE MODAL ============ -->
+<div class="modal-overlay" id="addApplianceModal">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <h2>Nuovo elettrodomestico</h2>
+
+    <div class="appliance-type-grid" id="applianceTypeGrid">
+      <div class="appliance-type-option" data-type="freezer" onclick="selectApplianceType('freezer')">
+        <div class="atype-icon">🧊</div>
+        <div class="atype-label">Congelatore</div>
+      </div>
+      <div class="appliance-type-option" data-type="fridge" onclick="selectApplianceType('fridge')">
+        <div class="atype-icon">🥗</div>
+        <div class="atype-label">Frigorifero</div>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Nome (opzionale)</label>
+      <input class="form-input" type="text" id="inputApplianceName" placeholder="es. Congelatore garage">
+    </div>
+
+    <button class="submit-btn" id="submitApplianceBtn">Aggiungi</button>
+  </div>
+</div>
+
+<!-- ============ WEIGHT DIALOG ============ -->
+<div class="dialog-overlay" id="weightDialog">
+  <div class="dialog-box">
+    <h3>⚖️ Scala peso</h3>
+    <p id="weightDialogDesc"></p>
+    <input class="dialog-input" type="number" id="weightDialogInput" min="1" placeholder="Grammi da scalare">
+    <div class="dialog-hint" id="weightDialogHint"></div>
+    <div class="dialog-actions">
+      <button class="btn-cancel" onclick="closeWeightDialog()">Annulla</button>
+      <button class="btn-primary" onclick="confirmWeightUsage()">Scala</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ CONFIRM DELETE DIALOG ============ -->
+<div class="dialog-overlay" id="confirmOverlay">
+  <div class="dialog-box">
+    <h3>🗑 Rimuovere prodotto?</h3>
+    <p id="confirmText">Vuoi eliminare questo prodotto?</p>
+    <div class="dialog-actions">
+      <button class="btn-cancel" id="confirmCancel">Annulla</button>
+      <button class="btn-danger" id="confirmDelete">Elimina</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ CONFIRM DELETE APPLIANCE ============ -->
+<div class="dialog-overlay" id="confirmApplianceOverlay">
+  <div class="dialog-box">
+    <h3>🗑 Rimuovere elettrodomestico?</h3>
+    <p id="confirmApplianceText">Tutti i prodotti contenuti verranno eliminati.</p>
+    <div class="dialog-actions">
+      <button class="btn-cancel" onclick="document.getElementById('confirmApplianceOverlay').classList.remove('open')">Annulla</button>
+      <button class="btn-danger" onclick="confirmDeleteAppliance()">Elimina</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ DETAIL OVERLAY ============ -->
+<div class="detail-overlay" id="detailOverlay">
+  <div class="detail-modal" id="detailModal"></div>
+</div>
+
+<!-- ============ SCANNER ============ -->
+<div class="scanner-overlay" id="scannerOverlay">
+  <div class="scanner-header">
+    <h3>Scansione barcode</h3>
+    <button class="scanner-close" id="scannerClose">✕</button>
+  </div>
+  <div id="scanner-viewport">
+    <div class="scanner-guide">
+      <div class="frame"><div class="line"></div></div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ====================== DATA ======================
+const DB_ITEMS = 'ft_items';
+const DB_APPLIANCES = 'ft_appliances';
+
+function loadData(key) { try { return JSON.parse(localStorage.getItem(key)) || []; } catch { return []; } }
+function saveData(key, data) { localStorage.setItem(key, JSON.stringify(data)); }
+
+let items = loadData(DB_ITEMS);
+let appliances = loadData(DB_APPLIANCES);
+let activeApplianceId = null;
+let currentFilter = 'all';
+let searchQuery = '';
+let deleteTargetId = null;
+let deleteApplianceTargetId = null;
+let weightTargetId = null;
+let currentBarcode = '';
+let currentPhotoData = '';
+let newApplianceType = 'freezer';
+
+// Init default appliances if empty
+if (appliances.length === 0) {
+  appliances = [
+    { id: 'fridge_default', type: 'fridge', name: 'Frigorifero', icon: '🥗' },
+    { id: 'freezer_default', type: 'freezer', name: 'Congelatore', icon: '🧊' }
+  ];
+  saveData(DB_APPLIANCES, appliances);
+}
+activeApplianceId = appliances[0]?.id || null;
+
+// ====================== UTILS ======================
+function uid() { return Date.now().toString(36) + Math.random().toString(36).substr(2, 5); }
+
+function formatDate(d) {
+  if (!d) return 'N/D';
+  return new Date(d + 'T00:00:00').toLocaleDateString('it-IT', { day: 'numeric', month: 'short', year: 'numeric' });
+}
+
+function daysUntil(d) {
+  if (!d) return Infinity;
+  const now = new Date(); now.setHours(0,0,0,0);
+  return Math.ceil((new Date(d + 'T00:00:00') - now) / 864e5);
+}
+
+function expiryStatus(d) {
+  const days = daysUntil(d);
+  if (days < 0) return 'danger';
+  if (days <= 7) return 'warning';
+  return 'ok';
+}
+
+function expiryLabel(d) {
+  const days = daysUntil(d);
+  if (!d) return '';
+  if (days < 0) return `Scaduto ${Math.abs(days)}g fa`;
+  if (days === 0) return 'Scade oggi!';
+  if (days === 1) return 'Scade domani';
+  if (days <= 7) return `Scade tra ${days}g`;
+  return formatDate(d);
+}
+
+function showToast(msg, dur = 2500) {
+  const t = document.getElementById('toast');
+  t.textContent = msg; t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), dur);
+}
+
+function foodEmoji(name) {
+  const n = (name || '').toLowerCase();
+  const m = [
+    [['pizza'],'🍕'],[['carne','manzo','vitello','bistecca','hamburger'],'🥩'],
+    [['pollo','chicken'],'🍗'],[['pesce','salmone','tonno','merluzzo'],'🐟'],
+    [['verdur','spinac','broccol','insalat'],'🥦'],[['gelato','ice'],'🍦'],
+    [['pane','bread'],'🍞'],[['frutta','frutt','fragol','banana'],'🍓'],
+    [['past','lasagn','ravioli','gnocch'],'🍝'],[['minestra','zupp','brod'],'🍲'],
+    [['patatin','frit'],'🍟'],[['gamber','shrimp'],'🦐'],
+    [['latte','formaggio','mozzarella','yogurt','burro'],'🧀'],
+    [['uov'],'🥚'],[['torta','dolce','cake'],'🍰'],[['succo','juice'],'🧃'],
+  ];
+  for (const [keys, emoji] of m) { if (keys.some(k => n.includes(k))) return emoji; }
+  return '📦';
+}
+
+function formatWeight(g) {
+  if (g >= 1000) return (g / 1000).toFixed(g % 1000 === 0 ? 0 : 1) + ' kg';
+  return g + ' g';
+}
+
+function escHtml(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+// ====================== APPLIANCES ======================
+function getAppliance(id) { return appliances.find(a => a.id === id); }
+function itemsInAppliance(aId) { return items.filter(i => i.applianceId === aId); }
+
+function renderApplianceTabs() {
+  const container = document.getElementById('applianceTabs');
+  container.innerHTML = appliances.map(a => {
+    const count = itemsInAppliance(a.id).length;
+    const isActive = a.id === activeApplianceId;
+    const cls = isActive ? (a.type === 'fridge' ? 'active-fridge' : 'active-freezer') : '';
+    return `
+      <div class="appliance-tab ${cls}" onclick="switchAppliance('${a.id}')">
+        <span class="tab-icon">${a.icon}</span>
+        <span>${escHtml(a.name)}</span>
+        <span class="tab-count">${count}</span>
+      </div>`;
+  }).join('') +
+  `<button class="add-appliance-btn" onclick="openAddApplianceModal()" title="Aggiungi elettrodomestico">+</button>`;
+}
+
+function switchAppliance(id) {
+  activeApplianceId = id;
+  renderApplianceTabs();
+  renderList();
+}
+
+function selectApplianceType(type) {
+  newApplianceType = type;
+  document.querySelectorAll('.appliance-type-option').forEach(el => {
+    el.classList.remove('selected-fridge', 'selected-freezer');
+    if (el.dataset.type === type) {
+      el.classList.add(type === 'fridge' ? 'selected-fridge' : 'selected-freezer');
+    }
+  });
+}
+
+function openAddApplianceModal() {
+  newApplianceType = 'freezer';
+  document.getElementById('inputApplianceName').value = '';
+  document.querySelectorAll('.appliance-type-option').forEach(el => {
+    el.classList.remove('selected-fridge', 'selected-freezer');
+  });
+  selectApplianceType('freezer');
+  document.getElementById('addApplianceModal').classList.add('open');
+}
+
+function submitAppliance() {
+  const name = document.getElementById('inputApplianceName').value.trim();
+  const type = newApplianceType;
+  const icon = type === 'fridge' ? '🥗' : '🧊';
+  const defaultName = type === 'fridge' ? 'Frigorifero' : 'Congelatore';
+  const count = appliances.filter(a => a.type === type).length;
+  const finalName = name || (count > 0 ? `${defaultName} ${count + 1}` : defaultName);
+
+  appliances.push({ id: uid(), type, name: finalName, icon });
+  saveData(DB_APPLIANCES, appliances);
+  document.getElementById('addApplianceModal').classList.remove('open');
+  renderApplianceTabs();
+  populateApplianceSelect();
+  showToast(`${finalName} aggiunto! ${icon}`);
+}
+
+function promptDeleteAppliance(id) {
+  const a = getAppliance(id);
+  if (!a) return;
+  if (appliances.length <= 1) { showToast('Devi avere almeno un elettrodomestico'); return; }
+  deleteApplianceTargetId = id;
+  const count = itemsInAppliance(id).length;
+  document.getElementById('confirmApplianceText').textContent =
+    `Vuoi eliminare "${a.name}"?${count > 0 ? ` Contiene ${count} prodott${count === 1 ? 'o' : 'i'} che verranno rimossi.` : ''}`;
+  document.getElementById('confirmApplianceOverlay').classList.add('open');
+}
+
+function confirmDeleteAppliance() {
+  if (!deleteApplianceTargetId) return;
+  items = items.filter(i => i.applianceId !== deleteApplianceTargetId);
+  appliances = appliances.filter(a => a.id !== deleteApplianceTargetId);
+  if (activeApplianceId === deleteApplianceTargetId) {
+    activeApplianceId = appliances[0]?.id || null;
+  }
+  saveData(DB_ITEMS, items);
+  saveData(DB_APPLIANCES, appliances);
+  deleteApplianceTargetId = null;
+  document.getElementById('confirmApplianceOverlay').classList.remove('open');
+  renderApplianceTabs();
+  renderList();
+  populateApplianceSelect();
+  showToast('Elettrodomestico rimosso');
+}
+
+// ====================== RENDERING ======================
+function getFilteredItems() {
+  let filtered = items.filter(i => i.applianceId === activeApplianceId);
+  if (currentFilter === 'ok') filtered = filtered.filter(i => expiryStatus(i.expiry) === 'ok');
+  else if (currentFilter === 'expiring') filtered = filtered.filter(i => expiryStatus(i.expiry) === 'warning');
+  else if (currentFilter === 'expired') filtered = filtered.filter(i => expiryStatus(i.expiry) === 'danger');
+  if (searchQuery) {
+    const q = searchQuery.toLowerCase();
+    filtered = filtered.filter(i => i.name.toLowerCase().includes(q) || (i.barcode && i.barcode.includes(q)));
+  }
+  filtered.sort((a, b) => {
+    const sa = expiryStatus(a.expiry) === 'danger' ? 0 : expiryStatus(a.expiry) === 'warning' ? 1 : 2;
+    const sb = expiryStatus(b.expiry) === 'danger' ? 0 : expiryStatus(b.expiry) === 'warning' ? 1 : 2;
+    if (sa !== sb) return sa - sb;
+    const da = a.expiry ? new Date(a.expiry) : new Date('2099-01-01');
+    const db = b.expiry ? new Date(b.expiry) : new Date('2099-01-01');
+    return da - db;
+  });
+  return filtered;
+}
+
+function renderList() {
+  const container = document.getElementById('listContainer');
+  const filtered = getFilteredItems();
+  const applianceItems = itemsInAppliance(activeApplianceId);
+  const appliance = getAppliance(activeApplianceId);
+  const totalItems = applianceItems.length;
+
+  document.getElementById('countBadge').textContent =
+    `${totalItems} prodott${totalItems === 1 ? 'o' : 'i'}`;
+
+  if (filtered.length === 0) {
+    const icon = appliance?.type === 'fridge' ? '🥗' : '❄️';
+    container.innerHTML = `
+      <div class="empty-state">
+        <div class="icon">${totalItems === 0 ? icon : '🔍'}</div>
+        <h3>${totalItems === 0 ? (appliance?.name || 'Vuoto') + ' vuoto' : 'Nessun risultato'}</h3>
+        <p>${totalItems === 0 ? 'Tocca + per aggiungere il primo prodotto' : 'Prova a cambiare i filtri o la ricerca'}</p>
+      </div>`;
+    return;
+  }
+
+  container.innerHTML = filtered.map(item => {
+    const status = expiryStatus(item.expiry);
+    const emoji = foodEmoji(item.name);
+    const hasWeight = item.weight && item.weight > 0;
+    const weightPct = hasWeight && item.originalWeight ? Math.round((item.weight / item.originalWeight) * 100) : 100;
+    return `
+    <div class="item-card status-${status}" data-id="${item.id}" onclick="showDetail('${item.id}')">
+      ${item.photo
+        ? `<img class="item-photo" src="${item.photo}" alt="${escHtml(item.name)}">`
+        : `<div class="item-photo-placeholder">${emoji}</div>`}
+      <div class="item-info">
+        <div class="item-name">${escHtml(item.name)}</div>
+        <div class="item-meta">
+          ${item.expiry ? `<span class="expiry-badge ${status}">${expiryLabel(item.expiry)}</span>` : ''}
+          ${hasWeight ? `<span class="weight-tag">⚖ ${formatWeight(item.weight)}</span>` : ''}
+          ${item.barcode ? `<span class="barcode-label">📦 ${item.barcode}</span>` : ''}
+        </div>
+        ${hasWeight ? `
+        <div class="weight-bar-wrap">
+          <div class="weight-bar"><div class="weight-bar-fill" style="width:${weightPct}%"></div></div>
+          <div class="weight-text">${formatWeight(item.weight)} / ${formatWeight(item.originalWeight)}</div>
+        </div>` : ''}
+      </div>
+      <div class="item-actions" onclick="event.stopPropagation()">
+        <div class="qty-controls">
+          <button class="qty-btn" onclick="changeQty('${item.id}', -1)">−</button>
+          <span class="qty-value">${item.qty}</span>
+          <button class="qty-btn" onclick="changeQty('${item.id}', 1)">+</button>
+        </div>
+        ${hasWeight ? `<button class="weight-btn" onclick="openWeightDialog('${item.id}')">⚖ Scala peso</button>` : ''}
+        <button class="delete-btn" onclick="promptDelete('${item.id}')">🗑 Elimina</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ====================== ITEM ACTIONS ======================
+function changeQty(id, delta) {
+  const item = items.find(i => i.id === id);
+  if (!item) return;
+  item.qty += delta;
+  if (item.qty <= 0) { promptDelete(id); return; }
+  saveData(DB_ITEMS, items);
+  renderList();
+  renderApplianceTabs();
+  showToast(`${item.name}: quantità ${item.qty}`);
+}
+
+function promptDelete(id) {
+  const item = items.find(i => i.id === id);
+  if (!item) return;
+  deleteTargetId = id;
+  document.getElementById('confirmText').textContent = `Vuoi eliminare "${item.name}"?`;
+  document.getElementById('confirmOverlay').classList.add('open');
+}
+
+function confirmDeleteItem() {
+  if (!deleteTargetId) return;
+  const item = items.find(i => i.id === deleteTargetId);
+  items = items.filter(i => i.id !== deleteTargetId);
+  saveData(DB_ITEMS, items);
+  deleteTargetId = null;
+  document.getElementById('confirmOverlay').classList.remove('open');
+  renderList();
+  renderApplianceTabs();
+  if (item) showToast(`${item.name} rimosso`);
+}
+
+// ====================== WEIGHT DIALOG ======================
+function openWeightDialog(id) {
+  const item = items.find(i => i.id === id);
+  if (!item) return;
+  weightTargetId = id;
+  document.getElementById('weightDialogDesc').textContent = `${item.name}`;
+  document.getElementById('weightDialogHint').textContent = `Disponibile: ${formatWeight(item.weight)} — inserisci i grammi utilizzati`;
+  document.getElementById('weightDialogInput').value = '';
+  document.getElementById('weightDialogInput').max = item.weight;
+  document.getElementById('weightDialog').classList.add('open');
+  setTimeout(() => document.getElementById('weightDialogInput').focus(), 100);
+}
+
+function closeWeightDialog() {
+  document.getElementById('weightDialog').classList.remove('open');
+  weightTargetId = null;
+}
+
+function confirmWeightUsage() {
+  if (!weightTargetId) return;
+  const item = items.find(i => i.id === weightTargetId);
+  if (!item) return;
+  const amount = parseInt(document.getElementById('weightDialogInput').value) || 0;
+  if (amount <= 0) { showToast('Inserisci un valore valido'); return; }
+  if (amount > item.weight) { showToast('Non puoi scalare più del peso disponibile'); return; }
+
+  item.weight -= amount;
+  if (item.weight <= 0) {
+    // If weight reaches zero, either remove or keep based on qty
+    if (item.qty <= 1) {
+      items = items.filter(i => i.id !== weightTargetId);
+      showToast(`${item.name} esaurito e rimosso`);
+    } else {
+      item.qty -= 1;
+      item.weight = item.originalWeight; // Reset weight for next unit
+      showToast(`${item.name}: usata 1 unità, peso resettato. Rimangono ${item.qty}`);
+    }
+  } else {
+    showToast(`${item.name}: scalati ${formatWeight(amount)}, rimangono ${formatWeight(item.weight)}`);
+  }
+
+  saveData(DB_ITEMS, items);
+  closeWeightDialog();
+  renderList();
+  renderApplianceTabs();
+}
+
+// ====================== DETAIL ======================
+function showDetail(id) {
+  const item = items.find(i => i.id === id);
+  if (!item) return;
+  const status = expiryStatus(item.expiry);
+  const emoji = foodEmoji(item.name);
+  const appliance = getAppliance(item.applianceId);
+  const hasWeight = item.weight && item.weight > 0;
+  const weightPct = hasWeight && item.originalWeight ? Math.round((item.weight / item.originalWeight) * 100) : 100;
+
+  document.getElementById('detailModal').innerHTML = `
+    <div class="modal-handle"></div>
+    ${item.photo ? `<img class="detail-photo" src="${item.photo}" alt="">` : ''}
+    <h2 style="font-size:22px;margin-bottom:14px;-webkit-text-fill-color:var(--text-primary)">${emoji} ${escHtml(item.name)}</h2>
+    <div class="detail-row">
+      <span class="label">📍 Posizione</span>
+      <span class="value">${appliance ? appliance.icon + ' ' + escHtml(appliance.name) : 'N/D'}</span>
+    </div>
+    <div class="detail-row">
+      <span class="label">📦 Quantità</span>
+      <span class="value">${item.qty}</span>
+    </div>
+    ${hasWeight ? `
+    <div class="detail-row">
+      <span class="label">⚖️ Peso</span>
+      <span class="value">${formatWeight(item.weight)} / ${formatWeight(item.originalWeight)}</span>
+    </div>
+    <div style="padding:0 14px 8px;">
+      <div class="weight-bar" style="height:6px"><div class="weight-bar-fill" style="width:${weightPct}%"></div></div>
+      <div style="text-align:center;font-size:12px;color:var(--text-muted);margin-top:4px">${weightPct}% rimanente</div>
+    </div>` : ''}
+    ${item.expiry ? `
+    <div class="detail-row">
+      <span class="label">📅 Scadenza</span>
+      <span class="expiry-badge ${status}" style="font-size:13px">${expiryLabel(item.expiry)}</span>
+    </div>` : ''}
+    ${item.barcode ? `
+    <div class="detail-row">
+      <span class="label">📦 Barcode</span>
+      <span class="value" style="font-family:monospace;font-size:13px">${item.barcode}</span>
+    </div>` : ''}
+    <div class="detail-row">
+      <span class="label">📅 Aggiunto il</span>
+      <span class="value" style="font-size:13px">${formatDate(item.addedDate)}</span>
+    </div>
+  `;
+  document.getElementById('detailOverlay').classList.add('open');
+}
+
+// ====================== ADD ITEM ======================
+function populateApplianceSelect() {
+  const sel = document.getElementById('inputAppliance');
+  sel.innerHTML = appliances.map(a =>
+    `<option value="${a.id}" ${a.id === activeApplianceId ? 'selected' : ''}>${a.icon} ${escHtml(a.name)}</option>`
+  ).join('');
+}
+
+function openAddModal() {
+  currentBarcode = ''; currentPhotoData = '';
+  document.getElementById('inputName').value = '';
+  document.getElementById('inputQty').value = '1';
+  document.getElementById('inputWeight').value = '';
+  document.getElementById('inputExpiry').value = '';
+  document.getElementById('barcodeResult').textContent = '';
+  resetPhotoArea();
+  populateApplianceSelect();
+  const appliance = getAppliance(activeApplianceId);
+  const label = appliance?.type === 'fridge' ? 'frigorifero' : 'congelatore';
+  document.getElementById('addModalTitle').textContent = `Aggiungi al ${label}`;
+  document.getElementById('submitBtn').textContent = `Aggiungi al ${label}`;
+  document.getElementById('addModal').classList.add('open');
+}
+
+function closeAddModal() { document.getElementById('addModal').classList.remove('open'); }
+
+function resetPhotoArea() {
+  document.getElementById('photoArea').innerHTML = `
+    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M23 19a2 2 0 01-2 2H3a2 2 0 01-2-2V8a2 2 0 012-2h4l2-3h6l2 3h4a2 2 0 012 2z"/><circle cx="12" cy="13" r="4"/></svg>
+    <p>Tocca per scattare una foto</p>`;
+}
+
+function submitItem() {
+  const name = document.getElementById('inputName').value.trim();
+  const qty = parseInt(document.getElementById('inputQty').value) || 1;
+  const weight = parseInt(document.getElementById('inputWeight').value) || 0;
+  const expiry = document.getElementById('inputExpiry').value;
+  const applianceId = document.getElementById('inputAppliance').value;
+
+  if (!name) { showToast('Inserisci il nome del prodotto'); document.getElementById('inputName').focus(); return; }
+
+  items.push({
+    id: uid(), name, qty: Math.max(1, qty),
+    weight: weight > 0 ? weight : 0,
+    originalWeight: weight > 0 ? weight : 0,
+    expiry: expiry || '',
+    barcode: currentBarcode,
+    photo: currentPhotoData,
+    applianceId,
+    addedDate: new Date().toISOString().split('T')[0]
+  });
+
+  saveData(DB_ITEMS, items);
+  // Switch to the appliance where the item was added
+  activeApplianceId = applianceId;
+  closeAddModal();
+  renderApplianceTabs();
+  renderList();
+  showToast(`${name} aggiunto!`);
+}
+
+// ====================== PHOTO ======================
+document.getElementById('photoArea').addEventListener('click', () => {
+  document.getElementById('photoInput').click();
+});
+document.getElementById('photoInput').addEventListener('change', (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      const MAX = 400;
+      let w = img.width, h = img.height;
+      if (w > h) { if (w > MAX) { h *= MAX / w; w = MAX; } }
+      else { if (h > MAX) { w *= MAX / h; h = MAX; } }
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      currentPhotoData = canvas.toDataURL('image/jpeg', 0.7);
+      document.getElementById('photoArea').innerHTML = `<img src="${currentPhotoData}" alt="Foto prodotto">`;
+    };
+    img.src = ev.target.result;
+  };
+  reader.readAsDataURL(file);
+});
+
+// ====================== BARCODE ======================
+document.getElementById('scanBarcodeBtn').addEventListener('click', startScanner);
+document.getElementById('scannerClose').addEventListener('click', stopScanner);
+
+function startScanner() {
+  document.getElementById('scannerOverlay').classList.add('active');
+  Quagga.init({
+    inputStream: {
+      name: "Live", type: "LiveStream",
+      target: document.getElementById('scanner-viewport'),
+      constraints: { facingMode: "environment", width: { ideal: 1280 }, height: { ideal: 720 } }
+    },
+    decoder: {
+      readers: ["ean_reader", "ean_8_reader", "code_128_reader", "code_39_reader", "upc_reader", "upc_e_reader"]
+    },
+    locate: true, frequency: 10
+  }, (err) => {
+    if (err) { showToast('Errore fotocamera'); stopScanner(); return; }
+    Quagga.start();
+  });
+  Quagga.onDetected((result) => {
+    const code = result.codeResult.code;
+    if (code) {
+      currentBarcode = code;
+      document.getElementById('barcodeResult').textContent = `✓ Barcode: ${code}`;
+      if (navigator.vibrate) navigator.vibrate(100);
+      showToast(`Barcode: ${code}`);
+      stopScanner();
+      lookupBarcode(code);
+    }
+  });
+}
+
+function stopScanner() {
+  try { Quagga.stop(); } catch {}
+  document.getElementById('scannerOverlay').classList.remove('active');
+}
+
+async function lookupBarcode(code) {
+  try {
+    const res = await fetch(`https://world.openfoodfacts.org/api/v0/product/${code}.json`);
+    const data = await res.json();
+    if (data.status === 1 && data.product) {
+      const p = data.product;
+      const name = p.product_name_it || p.product_name || '';
+      if (name && !document.getElementById('inputName').value) {
+        document.getElementById('inputName').value = name;
+        showToast(`Trovato: ${name}`);
+      }
+      // Auto-fill weight if available
+      if (p.quantity) {
+        const wMatch = p.quantity.match(/(\d+)\s*g/i);
+        if (wMatch && !document.getElementById('inputWeight').value) {
+          document.getElementById('inputWeight').value = wMatch[1];
+        }
+      }
+      if (p.image_url && !currentPhotoData) {
+        currentPhotoData = p.image_url;
+        document.getElementById('photoArea').innerHTML = `<img src="${p.image_url}" alt="Foto" crossorigin="anonymous">`;
+      }
+    }
+  } catch {}
+}
+
+// ====================== SETTINGS/MANAGE ======================
+document.getElementById('manageAppliancesBtn').addEventListener('click', () => {
+  // Show a management view — open appliance modal to add, or long press to delete
+  openAddApplianceModal();
+});
+
+// ====================== EVENTS ======================
+document.getElementById('fabAdd').addEventListener('click', openAddModal);
+document.getElementById('submitBtn').addEventListener('click', submitItem);
+document.getElementById('submitApplianceBtn').addEventListener('click', submitAppliance);
+document.getElementById('confirmCancel').addEventListener('click', () => {
+  document.getElementById('confirmOverlay').classList.remove('open');
+  deleteTargetId = null;
+});
+document.getElementById('confirmDelete').addEventListener('click', confirmDeleteItem);
+
+// Close modals on overlay
+['addModal', 'addApplianceModal', 'detailOverlay'].forEach(id => {
+  document.getElementById(id).addEventListener('click', (e) => {
+    if (e.target === e.currentTarget) e.target.classList.remove('open');
+  });
+});
+
+// Search
+document.getElementById('searchInput').addEventListener('input', (e) => {
+  searchQuery = e.target.value; renderList();
+});
+
+// Filters
+document.querySelectorAll('.chip').forEach(chip => {
+  chip.addEventListener('click', () => {
+    document.querySelectorAll('.chip').forEach(c => c.classList.remove('active'));
+    chip.classList.add('active');
+    currentFilter = chip.dataset.filter;
+    renderList();
+  });
+});
+
+// Long-press on appliance tab to delete
+let longPressTimer = null;
+document.getElementById('applianceTabs').addEventListener('touchstart', (e) => {
+  const tab = e.target.closest('.appliance-tab');
+  if (!tab) return;
+  const id = appliances.find(a => tab.textContent.includes(a.name))?.id;
+  if (!id) return;
+  longPressTimer = setTimeout(() => promptDeleteAppliance(id), 600);
+}, { passive: true });
+document.getElementById('applianceTabs').addEventListener('touchend', () => {
+  clearTimeout(longPressTimer);
+}, { passive: true });
+document.getElementById('applianceTabs').addEventListener('touchmove', () => {
+  clearTimeout(longPressTimer);
+}, { passive: true });
+
+// ====================== INIT ======================
+renderApplianceTabs();
+renderList();
+</script>
+</body>
+</html>
