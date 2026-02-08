@@ -547,7 +547,7 @@ body { font-family:var(--font-body); background:var(--bg-deep); color:var(--text
     <button class="auth-btn" id="authBtn" onclick="handleAuth()">Accedi</button>
     <div class="auth-toggle">
       <span id="authToggleText">Non hai un account?</span>
-      <a id="authToggleLink" onclick="toggleAuthMode()">Registrati</a>
+      <a id="authToggleLink" href="javascript:void(0)" onclick="toggleAuthMode()">Registrati</a>
     </div>
   </div>
 </div>
@@ -722,11 +722,29 @@ body { font-family:var(--font-body); background:var(--bg-deep); color:var(--text
 // =================== CONFIGURAZIONE SUPABASE =================
 // =============================================================
 // 👇 SOSTITUISCI con i tuoi valori da Supabase Dashboard → Settings → API
-const SUPABASE_URL = 'https://jiinpzffsksjhghokkpj.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImppaW5wemZmc2tzamhnaG9ra3BqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA1NjA5NzQsImV4cCI6MjA4NjEzNjk3NH0.562Alvk9BCbWC9m-URuonR6FkrrfQiVAXrcnvPQT_rY';
+const SUPABASE_URL = 'https://YOUR_PROJECT_ID.supabase.co';
+const SUPABASE_ANON_KEY = 'YOUR_ANON_KEY';
 // =============================================================
 
-const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+// Validazione configurazione
+const isConfigured = SUPABASE_URL !== 'https://YOUR_PROJECT_ID.supabase.co' && SUPABASE_ANON_KEY !== 'YOUR_ANON_KEY';
+
+let sb = null;
+try {
+  sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+} catch(e) {
+  console.error('Errore creazione client Supabase:', e);
+}
+
+if (!isConfigured) {
+  document.addEventListener('DOMContentLoaded', () => {
+    const errEl = document.getElementById('authError');
+    if (errEl) {
+      errEl.textContent = '⚠️ Configura SUPABASE_URL e SUPABASE_ANON_KEY in index.html (vedi SETUP_GUIDA.md)';
+      errEl.classList.add('show');
+    }
+  });
+}
 
 let currentUser = null;
 let appliances = [];
@@ -793,16 +811,27 @@ async function handleAuth() {
   const sucEl = document.getElementById('authSuccess');
   errEl.classList.remove('show'); sucEl.classList.remove('show');
 
+  if (!isConfigured) {
+    errEl.textContent = '⚠️ Configura SUPABASE_URL e SUPABASE_ANON_KEY in index.html';
+    errEl.classList.add('show'); return;
+  }
+  if (!sb) {
+    errEl.textContent = '⚠️ Errore connessione a Supabase. Controlla URL e chiave API.';
+    errEl.classList.add('show'); return;
+  }
   if (!email || !password) { errEl.textContent='Compila tutti i campi'; errEl.classList.add('show'); return; }
   if (password.length < 6) { errEl.textContent='La password deve avere almeno 6 caratteri'; errEl.classList.add('show'); return; }
 
-  document.getElementById('authBtn').disabled = true;
+  const btn = document.getElementById('authBtn');
+  btn.disabled = true;
+  btn.textContent = isLogin ? 'Accesso...' : 'Registrazione...';
+
   try {
     let result;
     if (isLogin) {
-      result = await supabase.auth.signInWithPassword({ email, password });
+      result = await sb.auth.signInWithPassword({ email, password });
     } else {
-      result = await supabase.auth.signUp({ email, password });
+      result = await sb.auth.signUp({ email, password });
     }
     if (result.error) throw result.error;
     if (!isLogin && !result.data.session) {
@@ -810,21 +839,26 @@ async function handleAuth() {
       sucEl.classList.add('show');
     }
   } catch (e) {
-    const msg = e.message || 'Errore sconosciuto';
+    console.error('Auth error:', e);
+    const msg = e.message || String(e);
     const translations = {
       'Invalid login credentials': 'Credenziali non valide',
       'User already registered': 'Utente già registrato',
       'Password should be at least 6 characters': 'La password deve avere almeno 6 caratteri',
+      'Email not confirmed': 'Conferma la tua email prima di accedere',
+      'Failed to fetch': 'Errore di rete. Controlla la connessione e le chiavi Supabase.',
+      'Invalid API key': 'Chiave API non valida. Controlla SUPABASE_ANON_KEY.',
     };
     errEl.textContent = translations[msg] || msg;
     errEl.classList.add('show');
   }
-  document.getElementById('authBtn').disabled = false;
+  btn.disabled = false;
+  btn.textContent = isLogin ? 'Accedi' : 'Registrati';
 }
 
 async function handleLogout() {
   toggleUserMenu();
-  await supabase.auth.signOut();
+  await sb.auth.signOut();
   currentUser = null;
   appliances = []; items = [];
   document.getElementById('app').style.display = 'none';
@@ -845,28 +879,30 @@ document.addEventListener('click', (e) => {
 });
 
 // =================== SESSION ===================
-supabase.auth.onAuthStateChange(async (event, session) => {
-  if (session?.user) {
-    currentUser = session.user;
-    document.getElementById('authScreen').classList.add('hidden');
-    document.getElementById('app').style.display = 'flex';
-    document.getElementById('userEmail').textContent = currentUser.email;
-    await loadData();
-    setupRealtime();
-  } else {
-    currentUser = null;
-    document.getElementById('app').style.display = 'none';
-    document.getElementById('authScreen').classList.remove('hidden');
-  }
-});
+if (sb) {
+  sb.auth.onAuthStateChange(async (event, session) => {
+    if (session?.user) {
+      currentUser = session.user;
+      document.getElementById('authScreen').classList.add('hidden');
+      document.getElementById('app').style.display = 'flex';
+      document.getElementById('userEmail').textContent = currentUser.email;
+      await loadData();
+      setupRealtime();
+    } else {
+      currentUser = null;
+      document.getElementById('app').style.display = 'none';
+      document.getElementById('authScreen').classList.remove('hidden');
+    }
+  });
+}
 
 // =================== DATA LOADING ===================
 async function loadData() {
   setSyncStatus('syncing');
   try {
     const [aRes, iRes] = await Promise.all([
-      supabase.from('appliances').select('*').order('created_at'),
-      supabase.from('items').select('*').order('created_at')
+      sb.from('appliances').select('*').order('created_at'),
+      sb.from('items').select('*').order('created_at')
     ]);
     if (aRes.error) throw aRes.error;
     if (iRes.error) throw iRes.error;
@@ -880,7 +916,7 @@ async function loadData() {
         { user_id: currentUser.id, type:'fridge', name:'Frigorifero', icon:'🥗' },
         { user_id: currentUser.id, type:'freezer', name:'Congelatore', icon:'🧊' }
       ];
-      const { data, error } = await supabase.from('appliances').insert(defaults).select();
+      const { data, error } = await sb.from('appliances').insert(defaults).select();
       if (!error) appliances = data;
     }
 
@@ -897,7 +933,7 @@ async function loadData() {
 
 // =================== REALTIME ===================
 function setupRealtime() {
-  supabase.channel('db-changes')
+  sb.channel('db-changes')
     .on('postgres_changes', { event: '*', schema: 'public', table: 'items', filter: `user_id=eq.${currentUser.id}` }, (payload) => {
       handleItemChange(payload);
     })
@@ -974,7 +1010,7 @@ async function submitAppliance() {
   const finalName = name || (cnt>0 ? `${defName} ${cnt+1}` : defName);
 
   setSyncStatus('syncing');
-  const { data, error } = await supabase.from('appliances')
+  const { data, error } = await sb.from('appliances')
     .insert({ user_id:currentUser.id, type, name:finalName, icon }).select().single();
   if (error) { toast('Errore: '+error.message); setSyncStatus('offline'); return; }
   appliances.push(data);
@@ -998,8 +1034,8 @@ async function confirmDeleteAppliance() {
   if (!deleteAppTargetId) return;
   setSyncStatus('syncing');
   // Delete items first, then appliance
-  await supabase.from('items').delete().eq('appliance_id', deleteAppTargetId);
-  const { error } = await supabase.from('appliances').delete().eq('id', deleteAppTargetId);
+  await sb.from('items').delete().eq('appliance_id', deleteAppTargetId);
+  const { error } = await sb.from('appliances').delete().eq('id', deleteAppTargetId);
   if (error) { toast('Errore'); setSyncStatus('offline'); return; }
   items = items.filter(i => i.appliance_id !== deleteAppTargetId);
   appliances = appliances.filter(a => a.id !== deleteAppTargetId);
@@ -1080,7 +1116,7 @@ async function changeQty(id, delta) {
   if (newQty <= 0) { promptDelete(id); return; }
   item.qty = newQty;
   renderList();
-  const { error } = await supabase.from('items').update({ qty:newQty }).eq('id', id);
+  const { error } = await sb.from('items').update({ qty:newQty }).eq('id', id);
   if (error) toast('Errore sync');
 }
 
@@ -1098,7 +1134,7 @@ async function confirmDelete() {
   items = items.filter(i=>i.id!==deleteTargetId);
   renderList(); renderTabs();
   closeDialog('confirmDialog');
-  const { error } = await supabase.from('items').delete().eq('id', deleteTargetId);
+  const { error } = await sb.from('items').delete().eq('id', deleteTargetId);
   deleteTargetId = null;
   if (item) toast(`${item.name} rimosso`);
 }
@@ -1131,7 +1167,7 @@ async function confirmWeight() {
       items = items.filter(i=>i.id!==weightTargetId);
       closeDialog('weightDialog');
       renderList(); renderTabs();
-      await supabase.from('items').delete().eq('id', weightTargetId);
+      await sb.from('items').delete().eq('id', weightTargetId);
       weightTargetId = null;
       toast(`${item.name} esaurito e rimosso`);
       return;
@@ -1147,7 +1183,7 @@ async function confirmWeight() {
 
   closeDialog('weightDialog');
   renderList();
-  await supabase.from('items').update(updates).eq('id', item.id);
+  await sb.from('items').update(updates).eq('id', item.id);
   weightTargetId = null;
 }
 
@@ -1218,7 +1254,7 @@ async function submitItem() {
     added_date: new Date().toISOString().split('T')[0]
   };
 
-  const { data, error } = await supabase.from('items').insert(newItem).select().single();
+  const { data, error } = await sb.from('items').insert(newItem).select().single();
   document.getElementById('submitBtn').disabled=false;
   if (error) { toast('Errore: '+error.message); setSyncStatus('offline'); return; }
 
