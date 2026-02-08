@@ -722,8 +722,8 @@ body { font-family:var(--font-body); background:var(--bg-deep); color:var(--text
 // =================== CONFIGURAZIONE SUPABASE =================
 // =============================================================
 // 👇 SOSTITUISCI con i tuoi valori da Supabase Dashboard → Settings → API
-const SUPABASE_URL = 'https://jiinpzffsksjhghokkpj.supabase.co';
-const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImppaW5wemZmc2tzamhnaG9ra3BqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA1NjA5NzQsImV4cCI6MjA4NjEzNjk3NH0.562Alvk9BCbWC9m-URuonR6FkrrfQiVAXrcnvPQT_rY';
+const SUPABASE_URL = 'https://YOUR_PROJECT_ID.supabase.co';
+const SUPABASE_ANON_KEY = 'YOUR_ANON_KEY';
 // =============================================================
 
 // Validazione configurazione
@@ -858,6 +858,8 @@ async function handleAuth() {
 
 async function handleLogout() {
   toggleUserMenu();
+  dataLoaded = false;
+  if (realtimeChannel) { sb.removeChannel(realtimeChannel); realtimeChannel = null; }
   await sb.auth.signOut();
   currentUser = null;
   appliances = []; items = [];
@@ -879,33 +881,84 @@ document.addEventListener('click', (e) => {
 });
 
 // =================== SESSION ===================
+let realtimeChannel = null;
+let dataLoaded = false;
+
 if (sb) {
   sb.auth.onAuthStateChange(async (event, session) => {
+    console.log('Auth event:', event, !!session);
     if (session?.user) {
       currentUser = session.user;
       document.getElementById('authScreen').classList.add('hidden');
       document.getElementById('app').style.display = 'flex';
       document.getElementById('userEmail').textContent = currentUser.email;
-      await loadData();
-      setupRealtime();
+
+      // Avoid reloading data if already loaded (TOKEN_REFRESHED events)
+      if (!dataLoaded) {
+        try {
+          await loadData();
+          setupRealtime();
+          dataLoaded = true;
+        } catch(e) {
+          console.error('Init error:', e);
+          setSyncStatus('offline');
+          toast('Errore di caricamento. Riprova.');
+        }
+      }
     } else {
       currentUser = null;
+      dataLoaded = false;
+      // Cleanup realtime channel
+      if (realtimeChannel) {
+        sb.removeChannel(realtimeChannel);
+        realtimeChannel = null;
+      }
       document.getElementById('app').style.display = 'none';
       document.getElementById('authScreen').classList.remove('hidden');
     }
   });
+
+  // Fallback: if after 3 seconds we're still on auth screen but have a session, force check
+  setTimeout(async () => {
+    if (!currentUser && !dataLoaded) {
+      try {
+        const { data: { session } } = await sb.auth.getSession();
+        if (session?.user) {
+          currentUser = session.user;
+          document.getElementById('authScreen').classList.add('hidden');
+          document.getElementById('app').style.display = 'flex';
+          document.getElementById('userEmail').textContent = currentUser.email;
+          await loadData();
+          setupRealtime();
+          dataLoaded = true;
+        }
+      } catch(e) {
+        console.error('Session fallback error:', e);
+      }
+    }
+  }, 3000);
 }
 
 // =================== DATA LOADING ===================
 async function loadData() {
   setSyncStatus('syncing');
+  document.getElementById('listContainer').innerHTML =
+    '<div class="loading-state"><div class="spinner"></div><p style="color:var(--text-muted);font-size:13px">Caricamento...</p></div>';
+
   try {
     const [aRes, iRes] = await Promise.all([
       sb.from('appliances').select('*').order('created_at'),
       sb.from('items').select('*').order('created_at')
     ]);
-    if (aRes.error) throw aRes.error;
-    if (iRes.error) throw iRes.error;
+
+    if (aRes.error) {
+      console.error('Appliances error:', aRes.error);
+      throw aRes.error;
+    }
+    if (iRes.error) {
+      console.error('Items error:', iRes.error);
+      throw iRes.error;
+    }
 
     appliances = aRes.data;
     items = iRes.data;
@@ -933,7 +986,13 @@ async function loadData() {
 
 // =================== REALTIME ===================
 function setupRealtime() {
-  sb.channel('db-changes')
+  // Cleanup previous channel if exists
+  if (realtimeChannel) {
+    sb.removeChannel(realtimeChannel);
+    realtimeChannel = null;
+  }
+
+  realtimeChannel = sb.channel('db-changes-' + Date.now())
     .on('postgres_changes', { event: '*', schema: 'public', table: 'items', filter: `user_id=eq.${currentUser.id}` }, (payload) => {
       handleItemChange(payload);
     })
@@ -941,6 +1000,7 @@ function setupRealtime() {
       handleApplianceChange(payload);
     })
     .subscribe((status) => {
+      console.log('Realtime status:', status);
       setSyncStatus(status === 'SUBSCRIBED' ? 'online' : 'syncing');
     });
 }
