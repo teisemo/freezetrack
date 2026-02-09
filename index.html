@@ -718,7 +718,6 @@ body { font-family:var(--font-body); background:var(--bg-deep); color:var(--text
 <div class="toast" id="toast"></div>
 
 <script>
-// =============================================================
 // =================== CONFIGURAZIONE SUPABASE =================
 // =============================================================
 // 👇 SOSTITUISCI con i tuoi valori da Supabase Dashboard → Settings → API
@@ -1405,8 +1404,11 @@ document.getElementById('applianceTabs').addEventListener('touchmove',()=>clearT
 // Enter key on auth
 document.getElementById('authPassword').addEventListener('keydown',(e)=>{if(e.key==='Enter')handleAuth();});
 
-// PWA
-if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(()=>{});
+// PWA — Rimuovi service worker (non necessario con sync cloud)
+if ('serviceWorker' in navigator) {
+  navigator.serviceWorker.getRegistrations().then(regs => regs.forEach(r => r.unregister()));
+  caches.keys().then(keys => keys.forEach(k => caches.delete(k)));
+}
 </script>
 </body>
 </html>
