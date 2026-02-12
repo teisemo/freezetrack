@@ -538,7 +538,7 @@ body { font-family:var(--font-body); background:var(--bg-deep); color:var(--text
 <div class="auth-screen" id="authScreen">
   <div class="auth-card">
     <div class="logo">❄️</div>
-    <h1>FreezeTrack 12-02-2026</h1>
+    <h1>FreezeTrack</h1>
     <p class="subtitle">Gestisci i tuoi congelatori e frigoriferi</p>
     <div class="auth-error" id="authError"></div>
     <div class="auth-success" id="authSuccess"></div>
@@ -721,19 +721,23 @@ body { font-family:var(--font-body); background:var(--bg-deep); color:var(--text
 // =============================================================
 // =================== CONFIGURAZIONE SUPABASE =================
 // =============================================================
-// 👇 SOSTITUISCI con i tuoi valori da Supabase Dashboard → Settings → API
 const SUPABASE_URL = 'https://jiinpzffsksjhghokkpj.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImppaW5wemZmc2tzamhnaG9ra3BqIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzA1NjA5NzQsImV4cCI6MjA4NjEzNjk3NH0.562Alvk9BCbWC9m-URuonR6FkrrfQiVAXrcnvPQT_rY';
 // =============================================================
 
-// Validazione configurazione — controlla che URL e key siano stati modificati
 const isConfigured = SUPABASE_URL.length > 30 && SUPABASE_ANON_KEY.length > 30
   && !SUPABASE_URL.includes('YOUR_PROJECT') && !SUPABASE_ANON_KEY.includes('YOUR_ANON');
 
 let sb = null;
 try {
   if (isConfigured) {
-    sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      auth: {
+        persistSession: true,
+        autoRefreshToken: true,
+        detectSessionInUrl: false
+      }
+    });
   }
 } catch(e) {
   console.error('Errore creazione client Supabase:', e);
@@ -743,7 +747,7 @@ if (!isConfigured) {
   document.addEventListener('DOMContentLoaded', () => {
     const errEl = document.getElementById('authError');
     if (errEl) {
-      errEl.textContent = '⚠️ Configura SUPABASE_URL e SUPABASE_ANON_KEY in index.html (vedi SETUP_GUIDA.md)';
+      errEl.textContent = '⚠️ Configura SUPABASE_URL e SUPABASE_ANON_KEY in index.html';
       errEl.classList.add('show');
     }
   });
@@ -761,6 +765,76 @@ let weightTargetId = null;
 let currentBarcode = '';
 let currentPhotoData = '';
 let newAppType = 'freezer';
+
+// =================== APP STATE MACHINE ===================
+// States: 'auth' | 'loading' | 'ready'
+let appState = 'auth';
+let realtimeChannel = null;
+let initPromise = null; // Prevents double-init
+
+function showAuth() {
+  appState = 'auth';
+  document.getElementById('authScreen').classList.remove('hidden');
+  document.getElementById('app').style.display = 'none';
+}
+
+function showApp() {
+  document.getElementById('authScreen').classList.add('hidden');
+  document.getElementById('app').style.display = 'flex';
+  document.getElementById('userEmail').textContent = currentUser?.email || '';
+}
+
+// Single entry point for initializing the app after authentication
+async function initApp(user) {
+  // Prevent double initialization
+  if (initPromise) {
+    console.log('[init] Already initializing, waiting...');
+    return initPromise;
+  }
+  // If already ready with same user, skip
+  if (appState === 'ready' && currentUser?.id === user.id) {
+    console.log('[init] Already ready for this user, skipping');
+    return;
+  }
+
+  currentUser = user;
+  appState = 'loading';
+  showApp();
+
+  initPromise = (async () => {
+    try {
+      await loadData();
+      setupRealtime();
+      appState = 'ready';
+      console.log('[init] App ready for', user.email);
+    } catch(e) {
+      console.error('[init] Failed:', e);
+      setSyncStatus('offline');
+      toast('Errore di caricamento. Riprova.');
+      // Still show the app so user can retry or logout
+      appState = 'ready';
+    } finally {
+      initPromise = null;
+    }
+  })();
+
+  return initPromise;
+}
+
+function resetApp() {
+  console.log('[reset] Cleaning up app state');
+  appState = 'auth';
+  currentUser = null;
+  appliances = [];
+  items = [];
+  activeApplianceId = null;
+  initPromise = null;
+  if (realtimeChannel) {
+    try { sb.removeChannel(realtimeChannel); } catch(e) {}
+    realtimeChannel = null;
+  }
+  showAuth();
+}
 
 // =================== UTILS ===================
 function toast(msg, dur=2500) {
@@ -814,12 +888,8 @@ async function handleAuth() {
   const sucEl = document.getElementById('authSuccess');
   errEl.classList.remove('show'); sucEl.classList.remove('show');
 
-  if (!isConfigured) {
-    errEl.textContent = '⚠️ Configura SUPABASE_URL e SUPABASE_ANON_KEY in index.html';
-    errEl.classList.add('show'); return;
-  }
-  if (!sb) {
-    errEl.textContent = '⚠️ Errore connessione a Supabase. Controlla URL e chiave API.';
+  if (!isConfigured || !sb) {
+    errEl.textContent = '⚠️ Errore connessione a Supabase. Controlla configurazione.';
     errEl.classList.add('show'); return;
   }
   if (!email || !password) { errEl.textContent='Compila tutti i campi'; errEl.classList.add('show'); return; }
@@ -841,6 +911,7 @@ async function handleAuth() {
       sucEl.textContent = 'Registrazione completata! Controlla la tua email per confermare.';
       sucEl.classList.add('show');
     }
+    // signInWithPassword will trigger onAuthStateChange -> initApp
   } catch (e) {
     console.error('Auth error:', e);
     const msg = e.message || String(e);
@@ -849,7 +920,7 @@ async function handleAuth() {
       'User already registered': 'Utente già registrato',
       'Password should be at least 6 characters': 'La password deve avere almeno 6 caratteri',
       'Email not confirmed': 'Conferma la tua email prima di accedere',
-      'Failed to fetch': 'Errore di rete. Controlla la connessione e le chiavi Supabase.',
+      'Failed to fetch': 'Errore di rete. Controlla la connessione.',
       'Invalid API key': 'Chiave API non valida. Controlla SUPABASE_ANON_KEY.',
     };
     errEl.textContent = translations[msg] || msg;
@@ -861,20 +932,14 @@ async function handleAuth() {
 
 async function handleLogout() {
   toggleUserMenu();
-  dataLoaded = false;
-  if (realtimeChannel) { sb.removeChannel(realtimeChannel); realtimeChannel = null; }
-  await sb.auth.signOut();
-  currentUser = null;
-  appliances = []; items = [];
-  document.getElementById('app').style.display = 'none';
-  document.getElementById('authScreen').classList.remove('hidden');
+  try { await sb.auth.signOut(); } catch(e) { console.error('Logout error:', e); }
+  resetApp();
 }
 
 function toggleUserMenu() {
   document.getElementById('userMenu').classList.toggle('open');
 }
 
-// Close user menu on outside click
 document.addEventListener('click', (e) => {
   const menu = document.getElementById('userMenu');
   const btn = document.getElementById('userMenuBtn');
@@ -883,63 +948,47 @@ document.addEventListener('click', (e) => {
   }
 });
 
-// =================== SESSION ===================
-let realtimeChannel = null;
-let dataLoaded = false;
+// =================== SESSION BOOTSTRAP ===================
+// Strategy:
+// 1. On page load, call getSession() to check for existing session
+// 2. Use onAuthStateChange ONLY for subsequent events (login, logout, token refresh)
+// 3. initApp() is idempotent — calling it twice with same user is safe
 
 if (sb) {
-  sb.auth.onAuthStateChange(async (event, session) => {
-    console.log('Auth event:', event, !!session);
-    if (session?.user) {
-      currentUser = session.user;
-      document.getElementById('authScreen').classList.add('hidden');
-      document.getElementById('app').style.display = 'flex';
-      document.getElementById('userEmail').textContent = currentUser.email;
+  // Listen for auth state changes (login/logout/token refresh)
+  sb.auth.onAuthStateChange((event, session) => {
+    console.log('[auth]', event, session?.user?.email || 'no user');
 
-      // Avoid reloading data if already loaded (TOKEN_REFRESHED events)
-      if (!dataLoaded) {
-        try {
-          await loadData();
-          setupRealtime();
-          dataLoaded = true;
-        } catch(e) {
-          console.error('Init error:', e);
-          setSyncStatus('offline');
-          toast('Errore di caricamento. Riprova.');
-        }
+    if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+      if (session?.user) {
+        // initApp is idempotent, safe to call multiple times
+        initApp(session.user);
       }
-    } else {
-      currentUser = null;
-      dataLoaded = false;
-      // Cleanup realtime channel
-      if (realtimeChannel) {
-        sb.removeChannel(realtimeChannel);
-        realtimeChannel = null;
-      }
-      document.getElementById('app').style.display = 'none';
-      document.getElementById('authScreen').classList.remove('hidden');
+    } else if (event === 'SIGNED_OUT') {
+      resetApp();
     }
+    // Ignore INITIAL_SESSION — we handle it explicitly below with getSession()
   });
 
-  // Fallback: if after 3 seconds we're still on auth screen but have a session, force check
-  setTimeout(async () => {
-    if (!currentUser && !dataLoaded) {
-      try {
-        const { data: { session } } = await sb.auth.getSession();
-        if (session?.user) {
-          currentUser = session.user;
-          document.getElementById('authScreen').classList.add('hidden');
-          document.getElementById('app').style.display = 'flex';
-          document.getElementById('userEmail').textContent = currentUser.email;
-          await loadData();
-          setupRealtime();
-          dataLoaded = true;
-        }
-      } catch(e) {
-        console.error('Session fallback error:', e);
+  // Explicit session check on page load
+  (async () => {
+    try {
+      console.log('[boot] Checking existing session...');
+      const { data: { session }, error } = await sb.auth.getSession();
+      if (error) {
+        console.error('[boot] getSession error:', error);
+        return;
       }
+      if (session?.user) {
+        console.log('[boot] Found existing session for', session.user.email);
+        await initApp(session.user);
+      } else {
+        console.log('[boot] No existing session');
+      }
+    } catch(e) {
+      console.error('[boot] Session check failed:', e);
     }
-  }, 3000);
+  })();
 }
 
 // =================== DATA LOADING ===================
@@ -948,50 +997,37 @@ async function loadData() {
   document.getElementById('listContainer').innerHTML =
     '<div class="loading-state"><div class="spinner"></div><p style="color:var(--text-muted);font-size:13px">Caricamento...</p></div>';
 
-  try {
-    const [aRes, iRes] = await Promise.all([
-      sb.from('appliances').select('*').order('created_at'),
-      sb.from('items').select('*').order('created_at')
-    ]);
+  const [aRes, iRes] = await Promise.all([
+    sb.from('appliances').select('*').order('created_at'),
+    sb.from('items').select('*').order('created_at')
+  ]);
 
-    if (aRes.error) {
-      console.error('Appliances error:', aRes.error);
-      throw aRes.error;
-    }
-    if (iRes.error) {
-      console.error('Items error:', iRes.error);
-      throw iRes.error;
-    }
+  if (aRes.error) throw aRes.error;
+  if (iRes.error) throw iRes.error;
 
-    appliances = aRes.data;
-    items = iRes.data;
+  appliances = aRes.data;
+  items = iRes.data;
 
-    // Create defaults if empty
-    if (appliances.length === 0) {
-      const defaults = [
-        { user_id: currentUser.id, type:'fridge', name:'Frigorifero', icon:'🥗' },
-        { user_id: currentUser.id, type:'freezer', name:'Congelatore', icon:'🧊' }
-      ];
-      const { data, error } = await sb.from('appliances').insert(defaults).select();
-      if (!error) appliances = data;
-    }
-
-    activeApplianceId = appliances[0]?.id || null;
-    renderTabs();
-    renderList();
-    setSyncStatus('online');
-  } catch (e) {
-    console.error('Load error:', e);
-    setSyncStatus('offline');
-    toast('Errore di caricamento');
+  // Create defaults if empty
+  if (appliances.length === 0) {
+    const defaults = [
+      { user_id: currentUser.id, type:'fridge', name:'Frigorifero', icon:'🥗' },
+      { user_id: currentUser.id, type:'freezer', name:'Congelatore', icon:'🧊' }
+    ];
+    const { data, error } = await sb.from('appliances').insert(defaults).select();
+    if (!error && data) appliances = data;
   }
+
+  activeApplianceId = appliances[0]?.id || null;
+  renderTabs();
+  renderList();
+  setSyncStatus('online');
 }
 
 // =================== REALTIME ===================
 function setupRealtime() {
-  // Cleanup previous channel if exists
   if (realtimeChannel) {
-    sb.removeChannel(realtimeChannel);
+    try { sb.removeChannel(realtimeChannel); } catch(e) {}
     realtimeChannel = null;
   }
 
@@ -1003,7 +1039,7 @@ function setupRealtime() {
       handleApplianceChange(payload);
     })
     .subscribe((status) => {
-      console.log('Realtime status:', status);
+      console.log('[realtime]', status);
       setSyncStatus(status === 'SUBSCRIBED' ? 'online' : 'syncing');
     });
 }
@@ -1096,7 +1132,6 @@ function promptDeleteApp(id) {
 async function confirmDeleteAppliance() {
   if (!deleteAppTargetId) return;
   setSyncStatus('syncing');
-  // Delete items first, then appliance
   await sb.from('items').delete().eq('appliance_id', deleteAppTargetId);
   const { error } = await sb.from('appliances').delete().eq('id', deleteAppTargetId);
   if (error) { toast('Errore'); setSyncStatus('offline'); return; }
@@ -1118,8 +1153,8 @@ function getFiltered() {
   if (searchQuery) { const q=searchQuery.toLowerCase(); f=f.filter(i=>i.name.toLowerCase().includes(q)||(i.barcode&&i.barcode.includes(q))); }
   f.sort((a,b) => {
     const sa=expiryStatus(a.expiry)==='danger'?0:expiryStatus(a.expiry)==='warning'?1:2;
-    const sb=expiryStatus(b.expiry)==='danger'?0:expiryStatus(b.expiry)==='warning'?1:2;
-    if(sa!==sb) return sa-sb;
+    const sba=expiryStatus(b.expiry)==='danger'?0:expiryStatus(b.expiry)==='warning'?1:2;
+    if(sa!==sba) return sa-sba;
     return (a.expiry||'2099')>(b.expiry||'2099')?1:-1;
   });
   return f;
@@ -1405,10 +1440,24 @@ document.getElementById('applianceTabs').addEventListener('touchmove',()=>clearT
 // Enter key on auth
 document.getElementById('authPassword').addEventListener('keydown',(e)=>{if(e.key==='Enter')handleAuth();});
 
-// PWA — Rimuovi service worker (non necessario con sync cloud)
+// =================== SERVICE WORKER CLEANUP ===================
+// Aggressively remove any previously installed service workers and caches
+// to prevent them from intercepting Supabase API calls
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.getRegistrations().then(regs => regs.forEach(r => r.unregister()));
-  caches.keys().then(keys => keys.forEach(k => caches.delete(k)));
+  navigator.serviceWorker.getRegistrations().then(regs => {
+    regs.forEach(r => {
+      console.log('[sw] Unregistering service worker:', r.scope);
+      r.unregister();
+    });
+  });
+  if ('caches' in window) {
+    caches.keys().then(keys => {
+      keys.forEach(k => {
+        console.log('[sw] Deleting cache:', k);
+        caches.delete(k);
+      });
+    });
+  }
 }
 </script>
 </body>
